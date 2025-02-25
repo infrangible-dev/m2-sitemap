@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+
+<!--
+ * @author      Andreas Knollmann
+ * @copyright   2014-2025 Softwareentwicklung Andreas Knollmann
+ * @license     http://www.opensource.org/licenses/mit-license.php MIT
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+    <default>
+        <infrangible_sitemap>
+            <general>
+                <export>1</export>
+                <file_name>sitemap.xml</file_name>
+                <main>1</main>
+            </general>
+            <product>
+                <export>1</export>
+                <changeFrequency>daily</changeFrequency>
+                <priority>1.0</priority>
+            </product>
+            <category>
+                <export>1</export>
+                <changeFrequency>monthly</changeFrequency>
+                <priority>1.0</priority>
+            </category>
+            <cms>
+                <export>1</export>
+                <changeFrequency>yearly</changeFrequency>
+                <priority>0.5</priority>
+            </cms>
+            <source>
+                <cms>Infrangible\Sitemap\Model\Source\Cms</cms>
+                <category>Infrangible\Sitemap\Model\Source\Category</category>
+                <product>Infrangible\Sitemap\Model\Source\Product</product>
+            </source>
+        </infrangible_sitemap>
+    </default>
+</config>

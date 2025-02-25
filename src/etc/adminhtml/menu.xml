@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+
+<!--
+ * @author      Andreas Knollmann
+ * @copyright   2014-2025 Softwareentwicklung Andreas Knollmann
+ * @license     http://www.opensource.org/licenses/mit-license.php MIT
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Backend:etc/menu.xsd">
+    <menu>
+        <add id="Infrangible_Sitemap::infrangible_sitemap" title="Sitemap" module="Infrangible_Sitemap" sortOrder="500" resource="Infrangible_Sitemap::infrangible_sitemap" parent="Infrangible_Foundation::menu"/>
+        <add id="Infrangible_Sitemap::infrangible_sitemap_manage" title="Manage" module="Infrangible_Sitemap" sortOrder="10" resource="Infrangible_Sitemap::infrangible_sitemap" parent="Infrangible_Sitemap::infrangible_sitemap" action="infrangible_sitemap/sitemap/index"/>
+    </menu>
+</config>
