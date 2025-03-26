@@ -306,12 +306,53 @@ class Sitemap extends Base
             $sitemapEntries = [];
 
             foreach ($fileUrls as $fileUrl) {
-                $sitemapEntries[] = [
+                $sitemapEntry = [
                     'loc'        => $fileUrl->getUrl(),
                     'lastmod'    => $fileUrl->getLastModified(),
                     'changefreq' => $fileUrl->getChangeFrequency(),
                     'priority'   => $fileUrl->getPriority()
                 ];
+
+                $images = $fileUrl->getImages();
+
+                if (count($images) > 0) {
+                    foreach ($images as $image) {
+                        $sitemapEntry[ 'image:image' ][] = [
+                            'image:loc'     => $image->getUrl(),
+                            'image:title'   => $image->getTitle(),
+                            'image:caption' => $image->getCaption()
+                        ];
+                    }
+                }
+
+                $dataObjects = $fileUrl->getDataObjects();
+
+                if (count($dataObjects) > 0) {
+                    $pageMapDataObjects = [];
+
+                    foreach ($dataObjects as $dataObject) {
+                        $pageMapDataObjectAttributes = [];
+
+                        foreach ($dataObject->getAttributes() as $dataObjectAttribute) {
+                            $pageMapDataObjectAttributes[] = [
+                                '@name'  => $dataObjectAttribute->getName(),
+                                '@value' => $dataObjectAttribute->getValue()
+                            ];
+                        }
+
+                        $pageMapDataObjects[] = [
+                            '@type'     => $dataObject->getType(),
+                            'Attribute' => $pageMapDataObjectAttributes
+                        ];
+                    }
+
+                    $sitemapEntry[ 'PageMap' ] = [
+                        '@xmlns'     => 'http://www.google.com/schemas/sitemap-pagemap/1.0',
+                        'DataObject' => $pageMapDataObjects
+                    ];
+                }
+
+                $sitemapEntries[] = $sitemapEntry;
             }
 
             $sitemapUrls = array_map(
@@ -383,7 +424,10 @@ class Sitemap extends Base
                     $this->xmlHelper->write(
                         $chunkFileName,
                         'urlset',
-                        ['xmlns' => 'http://www.sitemaps.org/schemas/sitemap/0.9'],
+                        [
+                            'xmlns'       => 'http://www.sitemaps.org/schemas/sitemap/0.9',
+                            'xmlns:image' => 'http://www.google.com/schemas/sitemap-image/1.1'
+                        ],
                         ['url' => $chunkUrls]
                     );
 
@@ -414,7 +458,10 @@ class Sitemap extends Base
                 $this->xmlHelper->write(
                     $filePath,
                     'sitemapindex',
-                    ['xmlns' => 'http://www.sitemaps.org/schemas/sitemap/0.9'],
+                    [
+                        'xmlns'       => 'http://www.sitemaps.org/schemas/sitemap/0.9',
+                        'xmlns:image' => 'http://www.google.com/schemas/sitemap-image/1.1'
+                    ],
                     ['sitemap' => $sitemaps]
                 );
             } else {
@@ -429,7 +476,10 @@ class Sitemap extends Base
                 $this->xmlHelper->write(
                     $filePath,
                     'urlset',
-                    ['xmlns' => 'http://www.sitemaps.org/schemas/sitemap/0.9'],
+                    [
+                        'xmlns'       => 'http://www.sitemaps.org/schemas/sitemap/0.9',
+                        'xmlns:image' => 'http://www.google.com/schemas/sitemap-image/1.1'
+                    ],
                     ['url' => $urls]
                 );
             }
@@ -465,7 +515,10 @@ class Sitemap extends Base
                 $this->xmlHelper->write(
                     $filePath,
                     'sitemapindex',
-                    ['xmlns' => 'http://www.sitemaps.org/schemas/sitemap/0.9'],
+                    [
+                        'xmlns'       => 'http://www.sitemaps.org/schemas/sitemap/0.9',
+                        'xmlns:image' => 'http://www.google.com/schemas/sitemap-image/1.1'
+                    ],
                     ['sitemap' => $allSitemaps]
                 );
             }

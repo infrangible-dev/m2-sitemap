@@ -23,6 +23,12 @@ class SitemapUrl implements ISitemapUrl
     /** @var string */
     private $priority;
 
+    /** @var ISitemapUrlImage[] */
+    private $images = [];
+
+    /** @var ISitemapUrlDataObject[] */
+    private $dataObjects = [];
+
     public function getChangeFrequency(): string
     {
         return $this->changeFrequency;
@@ -61,5 +67,40 @@ class SitemapUrl implements ISitemapUrl
     public function setUrl(string $url): void
     {
         $this->url = $url;
+    }
+
+    public function getImages(): array
+    {
+        return $this->images;
+    }
+
+    public function setImages(array $images): void
+    {
+        $this->images = $images;
+    }
+
+    public function addImage(ISitemapUrlImage $image): void
+    {
+        $this->images[] = $image;
+    }
+
+    public function getDataObjects(): array
+    {
+        return $this->dataObjects;
+    }
+
+    public function setDataObjects(array $dataObjects): void
+    {
+        $this->dataObjects = $dataObjects;
+    }
+
+    public function addDataObject(ISitemapUrlDataObject $dataObject): void
+    {
+        $this->dataObjects[] = $dataObject;
+    }
+
+    public function isValid(): bool
+    {
+        return $this->url !== null;
     }
 }

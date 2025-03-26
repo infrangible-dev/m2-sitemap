@@ -9,6 +9,7 @@ use Infrangible\Core\Helper\Url;
 use Infrangible\Sitemap\Model\ISitemapUrl;
 use Infrangible\Sitemap\Model\SitemapUrlFactory;
 use Magento\Cms\Model\Page;
+use Magento\Framework\Event\ManagerInterface;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\UrlInterface;
 use Psr\Log\LoggerInterface;
@@ -41,18 +42,23 @@ class Cms implements ISource
     /** @var string */
     protected $noRouteIdentifier;
 
+    /** @var ManagerInterface */
+    protected $eventManager;
+
     public function __construct(
         Url $urlHelper,
         Stores $storeHelper,
         \Infrangible\Core\Helper\Cms $cmsHelper,
         LoggerInterface $logging,
-        SitemapUrlFactory $sitemapUrlFactory
+        SitemapUrlFactory $sitemapUrlFactory,
+        ManagerInterface $eventManager
     ) {
         $this->urlHelper = $urlHelper;
         $this->storeHelper = $storeHelper;
         $this->cmsHelper = $cmsHelper;
         $this->logging = $logging;
         $this->sitemapUrlFactory = $sitemapUrlFactory;
+        $this->eventManager = $eventManager;
 
         $this->homeIdentifier = $this->storeHelper->getStoreConfig('web/default/cms_home_page');
         $this->noRouteIdentifier = $this->storeHelper->getStoreConfig('web/default/cms_no_route');
@@ -112,16 +118,24 @@ class Cms implements ISource
                 $defaultPriority
             );
 
+            $sitemapUrl = $this->createSitemapUrlModel();
+
             if (count($cmsPageData) > 0) {
-                [$url, $lastModified, $changeFrequency, $priority] = $cmsPageData;
+                $this->populateSitemapUrl(
+                    $sitemapUrl,
+                    $cmsPageData
+                );
+            }
 
-                $sitemapUrl = $this->sitemapUrlFactory->create();
+            $this->eventManager->dispatch(
+                'infrangible_sitemap_transform_cms',
+                [
+                    'sitemap_url' => $sitemapUrl,
+                    'cms_page'    => $cmsPage
+                ]
+            );
 
-                $sitemapUrl->setUrl($url);
-                $sitemapUrl->setLastModified($lastModified);
-                $sitemapUrl->setChangeFrequency($changeFrequency);
-                $sitemapUrl->setPriority($priority);
-
+            if ($sitemapUrl->isValid()) {
                 $urls[] = $sitemapUrl;
             }
         }
@@ -179,5 +193,22 @@ class Cms implements ISource
                 $priority
             ];
         }
+    }
+
+    public function createSitemapUrlModel(): ISitemapUrl
+    {
+        return $this->sitemapUrlFactory->create();
+    }
+
+    public function populateSitemapUrl(
+        ISitemapUrl $sitemapUrl,
+        array $cmsPageData
+    ): void {
+        [$url, $lastModified, $changeFrequency, $priority] = $cmsPageData;
+
+        $sitemapUrl->setUrl($url);
+        $sitemapUrl->setLastModified($lastModified);
+        $sitemapUrl->setChangeFrequency($changeFrequency);
+        $sitemapUrl->setPriority($priority);
     }
 }

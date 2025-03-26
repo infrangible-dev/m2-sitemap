@@ -11,7 +11,17 @@ use Infrangible\Core\Helper\Export;
 use Infrangible\Core\Helper\Stores;
 use Infrangible\Core\Helper\Url;
 use Infrangible\Sitemap\Model\ISitemapUrl;
+use Infrangible\Sitemap\Model\ISitemapUrlDataObject;
+use Infrangible\Sitemap\Model\ISitemapUrlDataObjectAttribute;
+use Infrangible\Sitemap\Model\ISitemapUrlImage;
+use Infrangible\Sitemap\Model\SitemapUrlDataObjectAttributeFactory;
+use Infrangible\Sitemap\Model\SitemapUrlDataObjectFactory;
 use Infrangible\Sitemap\Model\SitemapUrlFactory;
+use Infrangible\Sitemap\Model\SitemapUrlImageFactory;
+use Magento\Catalog\Model\Product\Image\UrlBuilder;
+use Magento\Framework\Event\ManagerInterface;
+use Magento\Store\Model\App\Emulation;
+use Magento\Store\Model\App\EmulationFactory;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -45,6 +55,24 @@ class Product implements ISource
     /** @var SitemapUrlFactory */
     protected $sitemapUrlFactory;
 
+    /** @var SitemapUrlImageFactory */
+    protected $sitemapUrlImageFactory;
+
+    /** @var SitemapUrlDataObjectFactory */
+    protected $sitemapUrlDataObjectFactory;
+
+    /** @var SitemapUrlDataObjectAttributeFactory */
+    protected $sitemapUrlDataObjectAttributeFactory;
+
+    /** @var UrlBuilder */
+    protected $urlBuilder;
+
+    /** @var Emulation */
+    protected $appEmulation;
+
+    /** @var ManagerInterface */
+    protected $eventManager;
+
     public function __construct(
         Variables $variables,
         Arrays $arrays,
@@ -53,7 +81,13 @@ class Product implements ISource
         Database $databaseHelper,
         Export $exportHelper,
         Url $urlHelper,
-        SitemapUrlFactory $sitemapUrlFactory
+        SitemapUrlFactory $sitemapUrlFactory,
+        SitemapUrlImageFactory $sitemapUrlImageFactory,
+        SitemapUrlDataObjectFactory $sitemapUrlDataObjectFactory,
+        SitemapUrlDataObjectAttributeFactory $sitemapUrlDataObjectAttributeFactory,
+        UrlBuilder $urlBuilder,
+        EmulationFactory $appEmulationFactory,
+        ManagerInterface $eventManager
     ) {
         $this->variables = $variables;
         $this->arrays = $arrays;
@@ -63,6 +97,12 @@ class Product implements ISource
         $this->exportHelper = $exportHelper;
         $this->urlHelper = $urlHelper;
         $this->sitemapUrlFactory = $sitemapUrlFactory;
+        $this->sitemapUrlImageFactory = $sitemapUrlImageFactory;
+        $this->sitemapUrlDataObjectFactory = $sitemapUrlDataObjectFactory;
+        $this->sitemapUrlDataObjectAttributeFactory = $sitemapUrlDataObjectAttributeFactory;
+        $this->urlBuilder = $urlBuilder;
+        $this->appEmulation = $appEmulationFactory->create();
+        $this->eventManager = $eventManager;
     }
 
     /**
@@ -143,19 +183,7 @@ class Product implements ISource
      */
     public function transformStoreData(int $storeId, array $storeData): array
     {
-        $changeFrequency = $this->storeHelper->getStoreConfig(
-            'infrangible_sitemap/product/changeFrequency',
-            'daily',
-            false,
-            $storeId
-        );
-
-        $priority = $this->storeHelper->getStoreConfig(
-            'infrangible_sitemap/product/priority',
-            '1.0',
-            false,
-            $storeId
-        );
+        $this->appEmulation->startEnvironmentEmulation($storeId);
 
         $urls = [];
 
@@ -173,31 +201,83 @@ class Product implements ISource
             ) : 0);
 
             if ($excludeFromSitemapId != 1) {
-                $url = $this->getProductUrl(
+                $sitemapUrl = $this->createSitemapUrlModel();
+
+                $this->populateSitemapUrl(
+                    $sitemapUrl,
                     $storeId,
                     $productData
                 );
 
-                $lastModified = date(
-                    'Y-m-d',
-                    strtotime(
-                        $this->arrays->getValue(
-                            $productData,
-                            'updated_at'
-                        )
-                    )
+                $galleryImages = $this->arrays->getValue(
+                    $productData,
+                    'gallery_images'
                 );
 
-                $sitemapUrl = $this->sitemapUrlFactory->create();
+                $addedDataObject = false;
 
-                $sitemapUrl->setUrl($url);
-                $sitemapUrl->setLastModified($lastModified);
-                $sitemapUrl->setChangeFrequency($changeFrequency);
-                $sitemapUrl->setPriority($priority);
+                foreach ($galleryImages as $galleryImageData) {
+                    $imagePath = $this->arrays->getValue(
+                        $galleryImageData,
+                        'value'
+                    );
+
+                    if ($imagePath !== \Magento\Sitemap\Model\ResourceModel\Catalog\Product::NOT_SELECTED_IMAGE) {
+                        $sitemapUrlImage = $this->createSitemapUrlImageModel();
+
+                        $this->populateSitemapUrlImage(
+                            $sitemapUrlImage,
+                            $productData,
+                            $galleryImageData
+                        );
+
+                        $sitemapUrl->addImage($sitemapUrlImage);
+
+                        if (! $addedDataObject) {
+                            $sitemapUrlDataObjectThumbnail = $this->createSitemapUrlDataObjectModel();
+
+                            $sitemapUrlDataObjectThumbnail->setType('thumbnail');
+
+                            $sitemapUrlDataObjectAttributeThumbnailName =
+                                $this->createSitemapUrlDataObjectAttributeModel();
+
+                            $this->populateDataObjectAttributeThumbnailName(
+                                $sitemapUrlDataObjectAttributeThumbnailName,
+                                $productData
+                            );
+
+                            $sitemapUrlDataObjectThumbnail->addAttribute($sitemapUrlDataObjectAttributeThumbnailName);
+
+                            $sitemapUrlDataObjectAttributeThumbnailSource =
+                                $this->createSitemapUrlDataObjectAttributeModel();
+
+                            $this->populateDataObjectAttributeThumbnailSource(
+                                $sitemapUrlDataObjectAttributeThumbnailSource,
+                                $galleryImageData
+                            );
+
+                            $sitemapUrlDataObjectThumbnail->addAttribute($sitemapUrlDataObjectAttributeThumbnailSource);
+
+                            $sitemapUrl->addDataObject($sitemapUrlDataObjectThumbnail);
+
+                            $addedDataObject = true;
+                        }
+                    }
+                }
+
+                $this->eventManager->dispatch(
+                    'infrangible_sitemap_transform_product',
+                    [
+                        'sitemap_url'  => $sitemapUrl,
+                        'product_data' => $productData
+                    ]
+                );
 
                 $urls[] = $sitemapUrl;
             }
         }
+
+        $this->appEmulation->stopEnvironmentEmulation();
 
         return $urls;
     }
@@ -233,5 +313,126 @@ class Product implements ISource
             ],
             $storeId
         );
+    }
+
+    public function createSitemapUrlModel(): ISitemapUrl
+    {
+        return $this->sitemapUrlFactory->create();
+    }
+
+    public function populateSitemapUrl(ISitemapUrl $sitemapUrl, int $storeId, array $productData): void
+    {
+        $url = $this->getProductUrl(
+            $storeId,
+            $productData
+        );
+
+        $lastModified = date(
+            'Y-m-d',
+            strtotime(
+                $this->arrays->getValue(
+                    $productData,
+                    'updated_at'
+                )
+            )
+        );
+
+        $changeFrequency = $this->storeHelper->getStoreConfig(
+            'infrangible_sitemap/product/changeFrequency',
+            'daily',
+            false,
+            $storeId
+        );
+
+        $priority = $this->storeHelper->getStoreConfig(
+            'infrangible_sitemap/product/priority',
+            '1.0',
+            false,
+            $storeId
+        );
+
+        $sitemapUrl->setUrl($url);
+        $sitemapUrl->setLastModified($lastModified);
+        $sitemapUrl->setChangeFrequency($changeFrequency);
+        $sitemapUrl->setPriority($priority);
+    }
+
+    public function createSitemapUrlImageModel(): ISitemapUrlImage
+    {
+        return $this->sitemapUrlImageFactory->create();
+    }
+
+    public function populateSitemapUrlImage(
+        ISitemapUrlImage $sitemapUrlImage,
+        array $productData,
+        array $galleryImageData
+    ): void {
+        $imagePath = $this->arrays->getValue(
+            $galleryImageData,
+            'value'
+        );
+
+        $url = $this->urlBuilder->getUrl(
+            $imagePath,
+            'product_page_image_large'
+        );
+
+        $title = $this->arrays->getValue(
+            $productData,
+            'name',
+            ''
+        );
+
+        $caption = $this->arrays->getValue(
+            $galleryImageData,
+            'label',
+            ''
+        );
+
+        $sitemapUrlImage->setUrl($url);
+        $sitemapUrlImage->setTitle($title);
+        $sitemapUrlImage->setCaption($caption);
+    }
+
+    public function createSitemapUrlDataObjectModel(): ISitemapUrlDataObject
+    {
+        return $this->sitemapUrlDataObjectFactory->create();
+    }
+
+    public function createSitemapUrlDataObjectAttributeModel(): ISitemapUrlDataObjectAttribute
+    {
+        return $this->sitemapUrlDataObjectAttributeFactory->create();
+    }
+
+    public function populateDataObjectAttributeThumbnailName(
+        ISitemapUrlDataObjectAttribute $dataObjectAttributeThumbnailName,
+        array $productData
+    ): void {
+        $name = $this->arrays->getValue(
+            $productData,
+            'name',
+            ''
+        );
+
+        $dataObjectAttributeThumbnailName->setName('name');
+        $dataObjectAttributeThumbnailName->setValue($name);
+    }
+
+    public function populateDataObjectAttributeThumbnailSource(
+        ISitemapUrlDataObjectAttribute $dataObjectAttributeThumbnailSource,
+        array $galleryImageData
+    ): void {
+        $imagePath = $this->arrays->getValue(
+            $galleryImageData,
+            'value'
+        );
+
+        $url = $this->urlBuilder->getUrl(
+            $imagePath,
+            'product_page_image_large'
+        );
+
+        $dataObjectAttributeThumbnailSource->setName('src');
+        $dataObjectAttributeThumbnailSource->setValue($url);
     }
 }

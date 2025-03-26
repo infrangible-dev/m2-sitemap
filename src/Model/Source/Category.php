@@ -11,6 +11,7 @@ use Infrangible\Core\Helper\Stores;
 use Infrangible\Core\Helper\Url;
 use Infrangible\Sitemap\Model\ISitemapUrl;
 use Infrangible\Sitemap\Model\SitemapUrlFactory;
+use Magento\Framework\Event\ManagerInterface;
 
 /**
  * @author      Andreas Knollmann
@@ -40,6 +41,9 @@ class Category implements ISource
     /** @var SitemapUrlFactory */
     protected $sitemapUrlFactory;
 
+    /** @var ManagerInterface */
+    protected $eventManager;
+
     public function __construct(
         Arrays $arrays,
         Database $databaseHelper,
@@ -47,7 +51,8 @@ class Category implements ISource
         Export $exportHelper,
         Stores $storeHelper,
         Url $urlHelper,
-        SitemapUrlFactory $sitemapUrlFactory
+        SitemapUrlFactory $sitemapUrlFactory,
+        ManagerInterface $eventManager
     ) {
         $this->arrays = $arrays;
         $this->databaseHelper = $databaseHelper;
@@ -56,6 +61,7 @@ class Category implements ISource
         $this->storeHelper = $storeHelper;
         $this->urlHelper = $urlHelper;
         $this->sitemapUrlFactory = $sitemapUrlFactory;
+        $this->eventManager = $eventManager;
     }
 
     public function getStoreData(int $storeId): array
@@ -80,20 +86,6 @@ class Category implements ISource
      */
     public function transformStoreData(int $storeId, array $storeData): array
     {
-        $changeFrequency = $this->storeHelper->getStoreConfig(
-            'infrangible_sitemap/category/changeFrequency',
-            'daily',
-            false,
-            $storeId
-        );
-
-        $priority = $this->storeHelper->getStoreConfig(
-            'infrangible_sitemap/category/priority',
-            '1.0',
-            false,
-            $storeId
-        );
-
         $urls = [];
 
         foreach ($storeData as $categoryData) {
@@ -110,27 +102,21 @@ class Category implements ISource
             ) : 0);
 
             if ($excludeFromSitemapId != 1) {
-                $url = $this->getCategoryUrl(
+                $sitemapUrl = $this->createSitemapUrlModel();
+
+                $this->populateSitemapUrl(
+                    $sitemapUrl,
                     $storeId,
                     $categoryData
                 );
 
-                $lastModified = date(
-                    'Y-m-d',
-                    strtotime(
-                        $this->arrays->getValue(
-                            $categoryData,
-                            'updated_at'
-                        )
-                    )
+                $this->eventManager->dispatch(
+                    'infrangible_sitemap_transform_category',
+                    [
+                        'sitemap_url'   => $sitemapUrl,
+                        'category_data' => $categoryData
+                    ]
                 );
-
-                $sitemapUrl = $this->sitemapUrlFactory->create();
-
-                $sitemapUrl->setUrl($url);
-                $sitemapUrl->setLastModified($lastModified);
-                $sitemapUrl->setChangeFrequency($changeFrequency);
-                $sitemapUrl->setPriority($priority);
 
                 $urls[] = $sitemapUrl;
             }
@@ -168,5 +154,47 @@ class Category implements ISource
             ],
             $storeId
         );
+    }
+
+    public function createSitemapUrlModel(): ISitemapUrl
+    {
+        return $this->sitemapUrlFactory->create();
+    }
+
+    public function populateSitemapUrl(ISitemapUrl $sitemapUrl, int $storeId, array $categoryData): void
+    {
+        $url = $this->getCategoryUrl(
+            $storeId,
+            $categoryData
+        );
+
+        $lastModified = date(
+            'Y-m-d',
+            strtotime(
+                $this->arrays->getValue(
+                    $categoryData,
+                    'updated_at'
+                )
+            )
+        );
+
+        $changeFrequency = $this->storeHelper->getStoreConfig(
+            'infrangible_sitemap/category/changeFrequency',
+            'daily',
+            false,
+            $storeId
+        );
+
+        $priority = $this->storeHelper->getStoreConfig(
+            'infrangible_sitemap/category/priority',
+            '1.0',
+            false,
+            $storeId
+        );
+
+        $sitemapUrl->setUrl($url);
+        $sitemapUrl->setLastModified($lastModified);
+        $sitemapUrl->setChangeFrequency($changeFrequency);
+        $sitemapUrl->setPriority($priority);
     }
 }

@@ -2,7 +2,7 @@
     "name": "infrangible/m2-sitemap",
     "description": "Infrangible Magento 2 Sitemap",
     "type": "magento2-module",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "license": "MIT",
     "keywords": [
         "Magento"
@@ -19,6 +19,7 @@
     "require": {
         "php": ">=7.1",
         "magento/framework": "~102.0.5|~103.0.0",
+        "fewedev/xml": ">=1.1.0",
         "infrangible/m2-backend-widget": "~3.3",
         "infrangible/m2-core": "~3.5",
         "infrangible/m2-task": "~2.4"
