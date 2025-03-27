@@ -11,6 +11,7 @@ use Infrangible\Core\Helper\Stores;
 use Infrangible\Core\Helper\Url;
 use Infrangible\Sitemap\Model\ISitemapUrl;
 use Infrangible\Sitemap\Model\SitemapUrlFactory;
+use Magento\Framework\DataObject;
 use Magento\Framework\Event\ManagerInterface;
 
 /**
@@ -66,6 +67,25 @@ class Category implements ISource
 
     public function getStoreData(int $storeId): array
     {
+        $categoryExport = $this->storeHelper->getStoreConfigFlag(
+            'infrangible_sitemap/category/export',
+            true,
+            $storeId
+        );
+
+        if (! $categoryExport) {
+            return [];
+        }
+
+        $attributes = ['url_path', 'updated_at', 'exclude_from_sitemap'];
+
+        $data = new DataObject(['attributes' => $attributes]);
+
+        $this->eventManager->dispatch(
+            'infrangible_sitemap_attributes_category',
+            ['attributes' => $data]
+        );
+
         $dbAdapter = $this->databaseHelper->getDefaultConnection();
 
         $activeCategoryIds = $this->categoryHelper->getActiveCategoryIds(
@@ -77,7 +97,7 @@ class Category implements ISource
             $dbAdapter,
             $activeCategoryIds,
             $storeId,
-            ['url_path', 'updated_at', 'exclude_from_sitemap']
+            $data->getData('attributes')
         );
     }
 

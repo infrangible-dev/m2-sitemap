@@ -19,6 +19,7 @@ use Infrangible\Sitemap\Model\SitemapUrlDataObjectFactory;
 use Infrangible\Sitemap\Model\SitemapUrlFactory;
 use Infrangible\Sitemap\Model\SitemapUrlImageFactory;
 use Magento\Catalog\Model\Product\Image\UrlBuilder;
+use Magento\Framework\DataObject;
 use Magento\Framework\Event\ManagerInterface;
 use Magento\Store\Model\App\Emulation;
 use Magento\Store\Model\App\EmulationFactory;
@@ -120,6 +121,15 @@ class Product implements ISource
             return [];
         }
 
+        $attributes = ['url_path', 'updated_at', 'exclude_from_sitemap'];
+
+        $data = new DataObject(['attributes' => $attributes]);
+
+        $this->eventManager->dispatch(
+            'infrangible_sitemap_attributes_product',
+            ['attributes' => $data]
+        );
+
         $showOutOfStock = $this->storeHelper->getStoreConfig(
             'cataloginventory/options/show_out_of_stock',
             false,
@@ -164,7 +174,7 @@ class Product implements ISource
                 $chunkProductIds,
                 $storeId,
                 [],
-                ['url_path', 'updated_at', 'exclude_from_sitemap']
+                $data->getData('attributes')
             );
 
             $productsData = array_merge(
